@@ -77,18 +77,20 @@ resource "aws_security_group" "strapi_ecs_sg" {
 }
 
 # ==========================================
-# 5. ECS SERVICE (EC2 Type)
+# 5. ECS SERVICE (Fixed for EC2 Launch Type)
 # ==========================================
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service-ec2" # New unique name
+  name            = "strapi-service-ec2-v2" # New unique name to avoid idempotency errors
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = aws_ecs_task_definition.strapi_task.arn
-  launch_type     = "EC2"                # CHANGED: FARGATE -> EC2
+  launch_type     = "EC2"                   # Must match task definition
   desired_count   = 1
 
   network_configuration {
     subnets          = data.aws_subnets.public.ids 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
-    assign_public_ip = true
+    
+    # CHANGED: Must be false for EC2 Launch Type
+    assign_public_ip = false 
   }
 }
