@@ -36,9 +36,16 @@ jobs:
           # Save tag for Terraform
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false # Recommended for cleaner logs in automation
+
       - name: Terraform Init and Apply
         env:
-          TF_VAR_image_tag: ${{ steps.build-image.outputs.tag }} # Passes tag to main.tf
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_image_tag: ${{ steps.build-image.outputs.tag }}
         run: |
           terraform init
           terraform apply -auto-approve
