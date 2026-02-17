@@ -16,7 +16,6 @@ data "aws_subnets" "public" {
   }
 }
 
-# Get latest ECS-optimized AMI for the region
 data "aws_ssm_parameter" "ecs_ami" {
   name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
 }
@@ -29,13 +28,12 @@ resource "aws_ecs_cluster" "strapi_cluster" {
 }
 
 # ==========================================
-# 3. EC2 INFRASTRUCTURE (Updated for Policy)
+# 3. EC2 INFRASTRUCTURE (Fixed Policy & Role)
 # ==========================================
-
 resource "aws_instance" "ecs_node" {
   ami                    = data.aws_ssm_parameter.ecs_ami.value
   
-  # CHANGED: t3.micro -> t2.micro to satisfy your 'only-t2.micro' policy
+  # FIXED: Must be t2.micro for your 'only-t2.micro' policy
   instance_type          = "t2.micro" 
   
   subnet_id              = data.aws_subnets.public.ids[0]
@@ -51,7 +49,7 @@ resource "aws_instance" "ecs_node" {
 }
 
 # ==========================================
-# 4. TASK DEFINITION (EC2 Type)
+# 4. TASK DEFINITION
 # ==========================================
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
@@ -59,7 +57,6 @@ resource "aws_ecs_task_definition" "strapi_task" {
   requires_compatibilities = ["EC2"]
   cpu                      = "256"
   memory                   = "512"
-  
   execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
@@ -78,7 +75,7 @@ resource "aws_ecs_task_definition" "strapi_task" {
 # 5. SECURITY GROUP
 # ==========================================
 resource "aws_security_group" "strapi_ecs_sg" {
-  name        = "strapi-ecs-sg-ec2-final-v2" 
+  name        = "strapi-ecs-sg-final-final" 
   vpc_id      = data.aws_vpc.default.id
   description = "Allow Strapi traffic"
 
@@ -98,10 +95,11 @@ resource "aws_security_group" "strapi_ecs_sg" {
 }
 
 # ==========================================
-# 6. ECS SERVICE
+# 6. ECS SERVICE (Fixed Idempotency)
 # ==========================================
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service-ec2-v3" # Incrementing to avoid locks
+  # CHANGED: v3 -> v4 to bypass the "not idempotent" error
+  name            = "strapi-service-ec2-v4" 
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = aws_ecs_task_definition.strapi_task.arn
   launch_type     = "EC2"
