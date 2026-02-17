@@ -40,8 +40,7 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
-  # Try using the standard AWS default execution role ARN
-  # This is often automatically trusted by ECS Fargate
+  # CHANGED: Using the standard default role that has the correct trust relationship
   execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
@@ -54,6 +53,24 @@ resource "aws_ecs_task_definition" "strapi_task" {
       portMappings = [{ containerPort = 1337, hostPort = 1337 }]
     }
   ])
+}
+
+# ==========================================
+# 5. ECS SERVICE (Fixed Idempotency)
+# ==========================================
+resource "aws_ecs_service" "strapi_service" {
+  # CHANGED: New name to avoid the "not idempotent" error
+  name            = "strapi-service-v3" 
+  cluster         = aws_ecs_cluster.strapi_cluster.id
+  task_definition = aws_ecs_task_definition.strapi_task.arn
+  launch_type     = "FARGATE"
+  desired_count   = 1
+
+  network_configuration {
+    subnets          = data.aws_subnets.public.ids 
+    security_groups  = [aws_security_group.strapi_ecs_sg.id]
+    assign_public_ip = true
+  }
 }
 
 # ==========================================
