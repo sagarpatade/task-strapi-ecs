@@ -29,20 +29,19 @@ resource "aws_ecs_cluster" "strapi_cluster" {
 }
 
 # ==========================================
-# 3. EC2 INFRASTRUCTURE (The "Missing" Piece)
+# 3. EC2 INFRASTRUCTURE (Updated for Policy)
 # ==========================================
 
-# This launches the actual server needed for the EC2 launch type
 resource "aws_instance" "ecs_node" {
   ami                    = data.aws_ssm_parameter.ecs_ami.value
-  instance_type          = "t3.micro"
+  
+  # CHANGED: t3.micro -> t2.micro to satisfy your 'only-t2.micro' policy
+  instance_type          = "t2.micro" 
+  
   subnet_id              = data.aws_subnets.public.ids[0]
   vpc_security_group_ids = [aws_security_group.strapi_ecs_sg.id]
-  
-  # Using your company-provided profile
   iam_instance_profile   = "ec2-ecr-role" 
 
-  # CRITICAL: This links the EC2 instance to your cluster
   user_data = <<-EOF
               #!/bin/bash
               echo ECS_CLUSTER=${aws_ecs_cluster.strapi_cluster.name} >> /etc/ecs/ecs.config
