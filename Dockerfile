@@ -1,9 +1,11 @@
 FROM node:20-bullseye
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libvips-dev python3 make g++ git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get clean && \
+    apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends \
+    libvips-dev python3 make g++ git && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/app
 
