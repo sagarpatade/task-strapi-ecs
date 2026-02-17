@@ -1,9 +1,38 @@
-# 1. ECS Cluster
+# ==========================================
+# 1. NETWORK DATA SOURCES (Auto-Discovery)
+# ==========================================
+
+# Fetches your default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Finds all subnets in the default VPC that are "Public"
+# This ensures Fargate has an Internet Gateway to pull the ECR image.
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
+# ==========================================
+# 2. ECS CLUSTER
+# ==========================================
+
 resource "aws_ecs_cluster" "strapi_cluster" {
   name = "strapi-fargate-cluster"
 }
 
-# 2. ECS Task Definition
+# ==========================================
+# 3. TASK DEFINITION
+# ==========================================
+
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
   network_mode             = "awsvpc"
@@ -11,8 +40,7 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
-  # USE THE COMPANY PROVIDED ARN DIRECTLY
-  # This bypasses the need for your user to have 'iam:CreateRole' permissions
+  # Uses the ARN provided by your company
   execution_role_arn       = "arn:aws:iam::811738710312:role/ec2-ecr-role"
 
   container_definitions = jsonencode([
@@ -32,10 +60,14 @@ resource "aws_ecs_task_definition" "strapi_task" {
   ])
 }
 
-# 3. Unique Security Group
+# ==========================================
+# 4. SECURITY GROUP
+# ==========================================
+
 resource "aws_security_group" "strapi_ecs_sg" {
-  name        = "strapi-ecs-sg-sagar-unique" # Changed name to avoid 'InvalidGroup.Duplicate'
-  description = "Allow Strapi traffic for Task 7"
+  name        = "strapi-ecs-sg-sagar-final" # Unique name to avoid duplicate errors
+  vpc_id      = data.aws_vpc.default.id
+  description = "Allow Strapi traffic on port 1337"
 
   ingress {
     from_port   = 1337
@@ -47,12 +79,15 @@ resource "aws_security_group" "strapi_ecs_sg" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1" # Allows task to talk to ECR and CloudWatch
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-# 4. ECS Service
+# ==========================================
+# 5. ECS SERVICE
+# ==========================================
+
 resource "aws_ecs_service" "strapi_service" {
   name            = "strapi-fargate-service"
   cluster         = aws_ecs_cluster.strapi_cluster.id
@@ -61,8 +96,8 @@ resource "aws_ecs_service" "strapi_service" {
   desired_count   = 1
 
   network_configuration {
-    # Ensure this subnet ID is correct for your environment
-    subnets          = ["subnet-0623ab3807e8e0f73"] 
+    # Dynamically uses the public subnets found above
+    subnets          = data.aws_subnets.public.ids 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
     assign_public_ip = true
   }
