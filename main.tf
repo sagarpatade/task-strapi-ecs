@@ -27,7 +27,6 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 3. ECS Task Definition
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
   network_mode             = "awsvpc"
@@ -35,19 +34,22 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
- 
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  # Hardcode the ARN of the role we know exists
+  execution_role_arn       = "arn:aws:iam::811738710312:role/ec2-ecr-role"
 
   container_definitions = jsonencode([
     {
       name      = "strapi-container"
       image     = "811738710312.dkr.ecr.us-east-1.amazonaws.com/sagar-patade-strapi-app:${var.image_tag}"
-        portMappings = [
-            {
-            containerPort = 1337
-            protocol      = "tcp"
-            }
-        ]
+      cpu       = 256
+      memory    = 512
+      essential = true
+      portMappings = [
+        {
+          containerPort = 1337
+          hostPort      = 1337
+        }
+      ]
     }
   ])
 }
