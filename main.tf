@@ -89,14 +89,14 @@ resource "aws_security_group" "strapi_ecs_sg" {
 # ==========================================
 
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-fargate-service"
+  # Change the name here to bypass the "not idempotent" error
+  name            = "strapi-service-v2" 
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = aws_ecs_task_definition.strapi_task.arn
   launch_type     = "FARGATE"
   desired_count   = 1
 
   network_configuration {
-    # Dynamically uses the public subnets found above
     subnets          = data.aws_subnets.public.ids 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
     assign_public_ip = true
