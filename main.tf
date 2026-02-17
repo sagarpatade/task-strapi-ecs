@@ -34,7 +34,7 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
-  # Hardcode the ARN of the role we know exists
+  # Use the Role-ARN provided by your company
   execution_role_arn       = "arn:aws:iam::811738710312:role/ec2-ecr-role"
 
   container_definitions = jsonencode([
