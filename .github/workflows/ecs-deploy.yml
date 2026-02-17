@@ -1,0 +1,44 @@
+name: ECS Fargate Deploy
+
+on:
+  push:
+    branches: [ main ] # Triggers on every push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: sagar-patade-strapi-app #
+          IMAGE_TAG: ${{ github.sha }} # Unique tagging for task revision
+        run: |
+          # Build the Docker image
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          # Push to the registry
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Save tag for Terraform
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init and Apply
+        env:
+          TF_VAR_image_tag: ${{ steps.build-image.outputs.tag }} # Passes tag to main.tf
+        run: |
+          terraform init
+          terraform apply -auto-approve
