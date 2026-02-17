@@ -1,20 +1,15 @@
 # ==========================================
-# 1. NETWORK DATA SOURCES (Auto-Discovery)
+# 1. NETWORK DATA SOURCES
 # ==========================================
-
-# Fetches your default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# Finds all subnets in the default VPC that are "Public"
-# This ensures Fargate has an Internet Gateway to pull the ECR image.
 data "aws_subnets" "public" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
-
   filter {
     name   = "map-public-ip-on-launch"
     values = ["true"]
@@ -24,23 +19,21 @@ data "aws_subnets" "public" {
 # ==========================================
 # 2. ECS CLUSTER
 # ==========================================
-
 resource "aws_ecs_cluster" "strapi_cluster" {
-  name = "strapi-fargate-cluster"
+  name = "strapi-fargate-cluster" # Keeping name same as created
 }
 
 # ==========================================
-# 3. TASK DEFINITION
+# 3. TASK DEFINITION (EC2 Type)
 # ==========================================
-
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["EC2"] # CHANGED: FARGATE -> EC2
   cpu                      = "256"
   memory                   = "512"
   
-  # CHANGED: Using the standard default role that has the correct trust relationship
+  # Using standard role (Ensure manager granted PassRole permission)
   execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
@@ -50,37 +43,23 @@ resource "aws_ecs_task_definition" "strapi_task" {
       cpu       = 256
       memory    = 512
       essential = true
-      portMappings = [{ containerPort = 1337, hostPort = 1337 }]
+      portMappings = [
+        {
+          containerPort = 1337
+          hostPort      = 1337
+        }
+      ]
     }
   ])
 }
 
 # ==========================================
-# 5. ECS SERVICE (Fixed Idempotency)
-# ==========================================
-resource "aws_ecs_service" "strapi_service" {
-  # CHANGED: New name to avoid the "not idempotent" error
-  name            = "strapi-service-v3" 
-  cluster         = aws_ecs_cluster.strapi_cluster.id
-  task_definition = aws_ecs_task_definition.strapi_task.arn
-  launch_type     = "FARGATE"
-  desired_count   = 1
-
-  network_configuration {
-    subnets          = data.aws_subnets.public.ids 
-    security_groups  = [aws_security_group.strapi_ecs_sg.id]
-    assign_public_ip = true
-  }
-}
-
-# ==========================================
 # 4. SECURITY GROUP
 # ==========================================
-
 resource "aws_security_group" "strapi_ecs_sg" {
-  name        = "strapi-ecs-sg-sagar-final" # Unique name to avoid duplicate errors
+  name        = "strapi-ecs-sg-ec2-final" 
   vpc_id      = data.aws_vpc.default.id
-  description = "Allow Strapi traffic on port 1337"
+  description = "Allow Strapi traffic"
 
   ingress {
     from_port   = 1337
@@ -92,8 +71,24 @@ resource "aws_security_group" "strapi_ecs_sg" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1" # Allows task to talk to ECR and CloudWatch
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
+# ==========================================
+# 5. ECS SERVICE (EC2 Type)
+# ==========================================
+resource "aws_ecs_service" "strapi_service" {
+  name            = "strapi-service-ec2" # New unique name
+  cluster         = aws_ecs_cluster.strapi_cluster.id
+  task_definition = aws_ecs_task_definition.strapi_task.arn
+  launch_type     = "EC2"                # CHANGED: FARGATE -> EC2
+  desired_count   = 1
+
+  network_configuration {
+    subnets          = data.aws_subnets.public.ids 
+    security_groups  = [aws_security_group.strapi_ecs_sg.id]
+    assign_public_ip = true
+  }
+}
