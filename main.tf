@@ -40,8 +40,9 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
-  # Uses the ARN provided by your company
-  execution_role_arn       = "arn:aws:iam::811738710312:role/ec2-ecr-role"
+  # Try using the standard AWS default execution role ARN
+  # This is often automatically trusted by ECS Fargate
+  execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
     {
@@ -50,12 +51,7 @@ resource "aws_ecs_task_definition" "strapi_task" {
       cpu       = 256
       memory    = 512
       essential = true
-      portMappings = [
-        {
-          containerPort = 1337
-          hostPort      = 1337
-        }
-      ]
+      portMappings = [{ containerPort = 1337, hostPort = 1337 }]
     }
   ])
 }
