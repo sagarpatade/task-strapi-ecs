@@ -16,24 +16,51 @@ data "aws_subnets" "public" {
   }
 }
 
+# Get latest ECS-optimized AMI for the region
+data "aws_ssm_parameter" "ecs_ami" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
+}
+
 # ==========================================
 # 2. ECS CLUSTER
 # ==========================================
 resource "aws_ecs_cluster" "strapi_cluster" {
-  name = "strapi-fargate-cluster" # Keeping name same as created
+  name = "strapi-fargate-cluster"
 }
 
 # ==========================================
-# 3. TASK DEFINITION (EC2 Type)
+# 3. EC2 INFRASTRUCTURE (The "Missing" Piece)
+# ==========================================
+
+# This launches the actual server needed for the EC2 launch type
+resource "aws_instance" "ecs_node" {
+  ami                    = data.aws_ssm_parameter.ecs_ami.value
+  instance_type          = "t3.micro"
+  subnet_id              = data.aws_subnets.public.ids[0]
+  vpc_security_group_ids = [aws_security_group.strapi_ecs_sg.id]
+  
+  # Using your company-provided profile
+  iam_instance_profile   = "ec2-ecr-role" 
+
+  # CRITICAL: This links the EC2 instance to your cluster
+  user_data = <<-EOF
+              #!/bin/bash
+              echo ECS_CLUSTER=${aws_ecs_cluster.strapi_cluster.name} >> /etc/ecs/ecs.config
+              EOF
+
+  tags = { Name = "Sagar-ECS-Host" }
+}
+
+# ==========================================
+# 4. TASK DEFINITION (EC2 Type)
 # ==========================================
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["EC2"] # CHANGED: FARGATE -> EC2
+  requires_compatibilities = ["EC2"]
   cpu                      = "256"
   memory                   = "512"
   
-  # Using standard role (Ensure manager granted PassRole permission)
   execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
@@ -43,21 +70,16 @@ resource "aws_ecs_task_definition" "strapi_task" {
       cpu       = 256
       memory    = 512
       essential = true
-      portMappings = [
-        {
-          containerPort = 1337
-          hostPort      = 1337
-        }
-      ]
+      portMappings = [{ containerPort = 1337, hostPort = 1337 }]
     }
   ])
 }
 
 # ==========================================
-# 4. SECURITY GROUP
+# 5. SECURITY GROUP
 # ==========================================
 resource "aws_security_group" "strapi_ecs_sg" {
-  name        = "strapi-ecs-sg-ec2-final" 
+  name        = "strapi-ecs-sg-ec2-final-v2" 
   vpc_id      = data.aws_vpc.default.id
   description = "Allow Strapi traffic"
 
@@ -77,20 +99,18 @@ resource "aws_security_group" "strapi_ecs_sg" {
 }
 
 # ==========================================
-# 5. ECS SERVICE (Fixed for EC2 Launch Type)
+# 6. ECS SERVICE
 # ==========================================
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service-ec2-v2" # New unique name to avoid idempotency errors
+  name            = "strapi-service-ec2-v3" # Incrementing to avoid locks
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = aws_ecs_task_definition.strapi_task.arn
-  launch_type     = "EC2"                   # Must match task definition
+  launch_type     = "EC2"
   desired_count   = 1
 
   network_configuration {
     subnets          = data.aws_subnets.public.ids 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
-    
-    # CHANGED: Must be false for EC2 Launch Type
-    assign_public_ip = false 
+    assign_public_ip = false # Required for EC2 launch type
   }
 }
