@@ -3,30 +3,7 @@ resource "aws_ecs_cluster" "strapi_cluster" {
   name = "strapi-fargate-cluster"
 }
 
-
-
-# 1. Create the Execution Role instead of looking it up
-resource "aws_iam_role" "ecs_execution_role" {
-  name = "sagar-ecs-execution-role-task7"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ecs-tasks.amazonaws.com"
-      }
-    }]
-  })
-}
-
-# 2. Attach the standard AWS policy for ECR and Logging
-resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
-  role       = aws_iam_role.ecs_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
+# 2. ECS Task Definition
 resource "aws_ecs_task_definition" "strapi_task" {
   family                   = "strapi-v4-task"
   network_mode             = "awsvpc"
@@ -34,7 +11,8 @@ resource "aws_ecs_task_definition" "strapi_task" {
   cpu                      = "256"
   memory                   = "512"
   
-  # Use the Role-ARN provided by your company
+  # USE THE COMPANY PROVIDED ARN DIRECTLY
+  # This bypasses the need for your user to have 'iam:CreateRole' permissions
   execution_role_arn       = "arn:aws:iam::811738710312:role/ec2-ecr-role"
 
   container_definitions = jsonencode([
@@ -54,6 +32,26 @@ resource "aws_ecs_task_definition" "strapi_task" {
   ])
 }
 
+# 3. Unique Security Group
+resource "aws_security_group" "strapi_ecs_sg" {
+  name        = "strapi-ecs-sg-sagar-unique" # Changed name to avoid 'InvalidGroup.Duplicate'
+  description = "Allow Strapi traffic for Task 7"
+
+  ingress {
+    from_port   = 1337
+    to_port     = 1337
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 # 4. ECS Service
 resource "aws_ecs_service" "strapi_service" {
   name            = "strapi-fargate-service"
@@ -62,32 +60,10 @@ resource "aws_ecs_service" "strapi_service" {
   launch_type     = "FARGATE"
   desired_count   = 1
 
-
-
   network_configuration {
-    subnets          = ["subnet-xxxxxx"] # Replace with your public subnet ID
+    # Ensure this subnet ID is correct for your environment
+    subnets          = ["subnet-0a612502807e38e6e"] 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
     assign_public_ip = true
-  }
-}
-
-# 5. Security Group for ECS Fargate
-resource "aws_security_group" "strapi_ecs_sg" {
-  name        = "strapi-ecs-fargate-sg"
-  description = "Allow Strapi traffic on port 1337"
-  
-
-  ingress {
-    from_port   = 1337
-    to_port     = 1337
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Allows access from anywhere
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1" # Allows all outbound traffic
-    cidr_blocks = ["0.0.0.0/0"]
   }
 }
