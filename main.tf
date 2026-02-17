@@ -62,7 +62,7 @@ resource "aws_ecs_service" "strapi_service" {
 
   network_configuration {
     # Ensure this subnet ID is correct for your environment
-    subnets          = ["subnet-0a612502807e38e6e"] 
+    subnets          = ["subnet-0623ab3807e8e0f73"] 
     security_groups  = [aws_security_group.strapi_ecs_sg.id]
     assign_public_ip = true
   }
